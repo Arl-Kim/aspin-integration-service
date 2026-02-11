@@ -133,7 +133,10 @@ npm test -- payments.service.spec.ts
 
 ## Documentation & Assessment Parts
 
-1. API Design & Documentation - See `/docs/api-spec.yaml`
+- API specifications are located in /docs
+- Written troubleshooting and monitoring answers are in /answers
+
+1. API Design & Documentation - See `/docs/api-spec.yaml` and `/docs/design-decisions.md`
 2. Integration Implementation - See `/src/`
 3. Debugging & Troubleshooting - See `/answers/part3-debugging.md`
 4. Monitoring & Observability - See `/answers/part4-monitoring.md`

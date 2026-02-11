@@ -1,0 +1,684 @@
+openapi: 3.0.0
+
+info:
+  title: PartnerCRM KYC Verification API
+  version: 1.0.0
+  description: |
+    RESTful API specification for customer KYC verification flow between ASPIn and PartnerCRM.
+
+    **Key Features:**
+    - Asynchronous verification processing
+    - Webhook-based status updates
+    - Idempotent request handling
+    - Comprehensive error responses
+    - Alignment with ASPIn production API patterns
+
+  contact:
+    name: Allan Kimutai Tum & ASPIn Integration Team
+    email: allankimutaitum@gmail.com
+  x-designed-by: Allan Kimutai Tum (Inclusivity Solutions - Support Engineer Assessment)
+
+servers:
+  - url: https://api.partnercrm.com/v1
+    description: Production server
+  - url: http://localhost:3000/v1
+    description: Development environment
+  - url: https://sandbox.partnercrm.com/v1
+    description: Sandbox environment for testing
+
+tags:
+  - name: Verification
+    description: KYC verification operations
+  - name: Status
+    description: Verification status queries
+  - name: Webhooks
+    description: Callback notifications for status changes
+
+# SECURITY SCHEMES
+components:
+  securitySchemes:
+    OAuth2Password:
+      type: oauth2
+      description: |
+        OAuth2 password grant flow used by ASPIn to obtain access tokens.
+        Clients authenticate using client credentials and user credentials
+        to receive a Bearer token.
+      flows:
+        password:
+          tokenUrl: https://engine.staging.aspin-inclusivity.com/oauth/token
+          scopes:
+            all: Full API access
+
+    # -- Additional Schemes --
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        API key authentication. Each partner receives a unique API key.
+        Format: 32-character hex string (e.g., "sk_live_abc123def456...")
+
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT tokens for authenticated admin operations (webhook registration).
+        Tokens expire after 24 hours.
+
+  # REQUEST/RESPONSE SCHEMAS
+
+  schemas:
+    # -- Customer KYC Request --
+    CustomerKYCRequest:
+      type: object
+      required:
+        - customer_id
+        - first_name
+        - last_name
+        - date_of_birth
+        - id_number
+        - id_type
+        - country
+        - partner_guid
+        - msisdn
+      properties:
+        customer_id:
+          type: string
+          pattern: "^CUST_[a-zA-Z0-9]{12}$"
+          example: "CUST_7890ABCD1234"
+          description: Unique customer identifier from ASPIn
+        idempotency_key:
+          type: string
+          pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$"
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: UUID v4 for idempotent request processing (prevents duplicates)
+        partner_guid:
+          type: string
+          example: "demo"
+          description: Partner identifier (matches ASPIn's partner query parameter)
+        msisdn:
+          type: string
+          pattern: "^00[1-9]\\d{6,14}$"
+          example: "00254712345678"
+          description: Customer phone number in E.164 format with leading '00' (not '+')
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: "John"
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: "Doe"
+        date_of_birth:
+          type: string
+          format: date
+          example: "1985-06-15"
+          description: ISO 8601 date format (YYYY-MM-DD)
+        id_number:
+          type: string
+          example: "12345678"
+          description: Government-issued ID number
+        id_type:
+          type: string
+          enum: [national_id, passport, driver_license, alien_id]
+          example: "national_id"
+        country:
+          type: string
+          pattern: "^[A-Z]{2}$"
+          example: "KE"
+          description: ISO 3166-1 alpha-2 country code
+        email:
+          type: string
+          format: email
+          example: "john.doe@example.com"
+        display_language:
+          type: string
+          enum: [en, fr, sw, rw]
+          example: "en"
+          description: Customer's preferred language (ISO 639-1)
+        beneficiary_name:
+          type: string
+          example: "Jane Doe"
+          description: Name of policy beneficiary
+        beneficiary_msisdn:
+          type: string
+          pattern: "^00[1-9]\\d{6,14}$"
+          example: "00254712345679"
+          description: Beneficiary phone number
+        external_identifier:
+          type: string
+          example: "CUST_EXT_7890"
+          description: Partner's own customer identifier (for mapping)
+        address:
+          type: object
+          properties:
+            street:
+              type: string
+              example: "123 Kamanyinya Drive"
+            city:
+              type: string
+              example: "Eldoret"
+            postal_code:
+              type: string
+              example: "30100"
+            country:
+              type: string
+              pattern: "^[A-Z]{2}$"
+              example: "KE"
+        registration_channel:
+          type: string
+          enum: [ApiClient, USSD, Portal, MobileApp]
+          example: "ApiClient"
+          description: Channel used for registration
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Flexible field for partner-specific data
+
+    # -- Verification Response --
+    VerificationResponse:
+      type: object
+      required:
+        - verification_id
+        - external_identifier
+        - status
+        - created_at
+      properties:
+        verification_id:
+          type: string
+          pattern: "^VERIF_[a-zA-Z0-9]{16}$"
+          example: "VERIF_abc123def456ghi7"
+          description: Unique verification reference
+        customer_id:
+          type: string
+          example: "CUST_7890ABCD1234"
+        customer_guid:
+          type: string
+          format: uuid
+          example: "3b61843d-af5c-4bde-934e-0ab90eab7bb7"
+          description: ASPIn-assigned customer GUID (if registration completes)
+        status:
+          type: string
+          enum: [pending, approved, rejected, under_review]
+          example: "pending"
+          description: |
+            Current verification status:
+            - `pending`: Initial state, verification in progress
+            - `under_review`: Manual review required
+            - `approved`: KYC verification successful
+            - `rejected`: KYC verification failed
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-02-11T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-02-11T10:30:00Z"
+        estimated_completion:
+          type: string
+          format: date-time
+          example: "2026-02-11T10:35:00Z"
+        _links:
+          type: object
+          properties:
+            self:
+              type: string
+              format: uri
+              example: "/v1/verification/requests/VERIF_abc123def456ghi7"
+            status:
+              type: string
+              format: uri
+              example: "/v1/verification/requests/VERIF_abc123def456ghi7/status"
+
+    # -- Webhook Verification Event --
+    WebhookVerificationEvent:
+      type: object
+      required:
+        - event_id
+        - event_type
+        - timestamp
+        - data
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: Unique event identifier (idempotency)
+        event_type:
+          type: string
+          enum:
+            [verification.completed, verification.updated, verification.failed]
+          example: "verification.completed"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-02-11T10:35:00Z"
+        data:
+          type: object
+          required:
+            - verification_id
+            - customer_id
+            - status
+          properties:
+            verification_id:
+              type: string
+              example: "VERIF_abc123def456ghi7"
+            customer_id:
+              type: string
+              example: "CUST_7890ABCD1234"
+            customer_guid:
+              type: string
+              format: uuid
+              example: "3b61843d-af5c-4bde-934e-0ab90eab7bb7"
+              description: ASPIn-assigned customer GUID (if registration completed)
+            status:
+              type: string
+              enum: [approved, rejected]
+            reason:
+              type: string
+              example: "ID verification failed - document expired"
+              description: Required when status is 'rejected'
+            verified_at:
+              type: string
+              format: date-time
+              example: "2026-02-11T10:34:30Z"
+            verified_by:
+              type: string
+              enum: [automated_system, manual_review, third_party]
+              example: "automated_system"
+        _metadata:
+          type: object
+          properties:
+            api_version:
+              type: string
+              example: "v1"
+            environment:
+              type: string
+              enum: [production, sandbox]
+              example: "production"
+
+    # -- Error Response --
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - status
+        - timestamp
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              example: "Request validation failed"
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                    example: "date_of_birth"
+                  issue:
+                    type: string
+                    example: "Must be a valid date in format YYYY-MM-DD"
+        status:
+          type: integer
+          example: 400
+        timestamp:
+          type: string
+          format: date-time
+        path:
+          type: string
+          example: "/v1/verification/requests"
+        trace_id:
+          type: string
+          example: "trace_abc123def456"
+          description: For distributed tracing
+
+# SECURITY REQUIREMENTS (Global)
+security:
+  - OAuth2Password: [all]
+
+# ENDPOINTS
+paths:
+  # -- Submit Verification Request --
+  /verification/requests:
+    post:
+      tags:
+        - Verification
+      summary: Submit customer for KYC verification
+      description: |
+        Initiates KYC verification for a customer. This is an asynchronous operation.
+
+        **Idempotency:** Send an `idempotency_key` (UUID v4) to prevent duplicate
+        processing. PartnerCRM will return the existing verification result for the 
+        same key within 24 hours.
+
+        **Partner Context:** Include `partner_guid` to identify the partner organization.
+        This aligns with ASPIn's `partner` query parameter requirement.
+
+        **Phone Numbers:** Use E.164 format with leading '00' (e.g., 00254712345678),
+        matching ASPIn's MSISDN format.
+
+        **Rate Limits:** 100 requests per minute per API key
+      operationId: createVerificationRequest
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+            format: uuid
+          required: false
+          description: UUID v4 for idempotent request processing (alternative to body field)
+        - name: X-Request-ID
+          in: header
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$"
+          required: false
+          description: Client-generated request ID for tracing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerKYCRequest"
+            examples:
+              standard_request:
+                summary: Standard KYC request (Kenya)
+                value:
+                  customer_id: "CUST_7890ABCD1234"
+                  idempotency_key: "550e8400-e29b-41d4-a716-446655440000"
+                  partner_guid: "demo"
+                  msisdn: "00254712345678"
+                  first_name: "John"
+                  last_name: "Doe"
+                  date_of_birth: "1985-06-15"
+                  id_number: "12345678"
+                  id_type: "national_id"
+                  country: "KE"
+                  email: "john.doe@example.com"
+                  display_language: "en"
+                  beneficiary_name: "Jane Doe"
+                  beneficiary_msisdn: "00254712345679"
+                  external_identifier: "CUST_EXT_7890"
+                  registration_channel: "ApiClient"
+                  address:
+                    street: "123 Kamanyinya Drive"
+                    city: "Eldoret"
+                    country: "KE"
+      responses:
+        "202":
+          description: Accepted - Verification request received and queued
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+              description: URL to check verification status
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds to wait before checking status (default 5)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationResponse"
+              example:
+                verification_id: "VERIF_abc123def456ghi7"
+                customer_id: "CUST_7890ABCD1234"
+                status: "pending"
+                created_at: "2026-02-11T10:30:00Z"
+                updated_at: "2026-02-11T10:30:00Z"
+                estimated_completion: "2026-02-11T10:35:00Z"
+                _links:
+                  self: "/v1/verification/requests/VERIF_abc123def456ghi7"
+                  status: "/v1/verification/requests/VERIF_abc123def456ghi7/status"
+
+        "400":
+          description: Bad Request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: "VALIDATION_ERROR"
+                  message: "Request validation failed"
+                  details:
+                    - field: "date_of_birth"
+                      issue: "Must be a valid date in format YYYY-MM-DD"
+                    - field: "msisdn"
+                      issue: "Must be in E.164 format with leading 00"
+                status: 400
+                timestamp: "2026-02-11T10:30:01Z"
+                path: "/v1/verification/requests"
+                trace_id: "trace_abc123def456"
+
+        "401":
+          description: Unauthorized - Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: "UNAUTHORIZED"
+                  message: "Invalid API key"
+                status: 401
+                timestamp: "2026-02-11T10:30:01Z"
+                path: "/v1/verification/requests"
+
+        "409":
+          description: Conflict - Duplicate idempotency key with different request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: "IDEMPOTENCY_CONFLICT"
+                  message: "Idempotency key already used with different request parameters"
+                status: 409
+                timestamp: "2026-02-11T10:30:01Z"
+
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          headers:
+            X-RateLimit-Limit:
+              schema:
+                type: integer
+              description: Number of requests allowed per minute
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+              description: Number of requests remaining in current window
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds to wait before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: "RATE_LIMITED"
+                  message: "Rate limit exceeded. Limit: 100 requests per minute"
+                status: 429
+                timestamp: "2026-02-11T10:30:01Z"
+
+  # -- Get Verification Status --
+  /verification/requests/{verificationId}:
+    get:
+      tags:
+        - Verification
+      summary: Get verification status
+      description: |
+        Retrieve current status of a verification request.
+        Similar to ASPIn's registration status endpoints.
+      operationId: getVerificationStatus
+      parameters:
+        - name: verificationId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^VERIF_[a-zA-Z0-9]{16}$"
+          example: "VERIF_abc123def456ghi7"
+        - name: partner_guid
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "demo"
+          description: Partner identifier (required for authorization)
+      responses:
+        "200":
+          description: OK - Returns current verification status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationResponse"
+        "404":
+          description: Not Found - Verification ID does not exist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - Invalid or missing API key
+
+  # -- Webhook Registration --
+  /webhooks/aspin/registrations:
+    post:
+      tags:
+        - Webhooks
+      summary: Register webhook endpoint
+      description: |
+        Register or update the webhook URL where PartnerCRM will send verification
+        status updates. Requires authentication with Bearer token (admin privileges).
+
+        **Security:** Store the provided secret securely. PartnerCRM will use it to
+        sign webhook payloads using HMAC-SHA256.
+      operationId: registerWebhook
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - url
+                - events
+                - partner_guid
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: "https://api.aspin.com/v1/webhooks/verification"
+                  description: HTTPS endpoint that accepts POST requests
+                partner_guid:
+                  type: string
+                  example: "demo"
+                  description: Partner identifier for webhook routing
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [verification.completed, verification.updated]
+                  example: ["verification.completed"]
+                secret:
+                  type: string
+                  example: "whsec_abc123def456"
+                  description: |
+                    Optional secret for webhook signature verification.
+                    If not provided, PartnerCRM generates one.
+      responses:
+        "201":
+          description: Webhook registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  url:
+                    type: string
+                    format: uri
+                  secret:
+                    type: string
+                    description: Webhook signing secret (only returned on creation)
+                  created_at:
+                    type: string
+                    format: date-time
+        "400":
+          description: Invalid webhook URL or configuration
+        "401":
+          description: Unauthorized - Invalid or missing Bearer token
+
+  # -- Webhook Callback (PartnerCRM → ASPIn) --
+  # This documents the callback that PartnerCRM makes to ASPIn's registered webhook URL
+  /webhooks/aspin/callback:
+    post:
+      tags:
+        - Webhooks
+      summary: Webhook callback (PartnerCRM → ASPIn)
+      description: |
+        PartnerCRM sends POST requests to the registered webhook URL when
+        verification status changes. This is documented to show the expected payload
+        that ASPIn's webhook handler must accept.
+
+        **Signature Verification:** PartnerCRM includes an `X-Signature` header
+        containing HMAC-SHA256 hash of the request body using the shared secret.
+
+        **Idempotency:** Each event has a unique `event_id` to prevent duplicate processing.
+      operationId: webhookCallback
+      parameters:
+        - name: X-Signature
+          in: header
+          schema:
+            type: string
+          required: true
+          description: HMAC-SHA256 signature of the request body
+        - name: X-Webhook-ID
+          in: header
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Unique webhook delivery ID (idempotency)
+        - name: X-Webhook-Timestamp
+          in: header
+          schema:
+            type: string
+            format: date-time
+          required: false
+          description: Timestamp of webhook delivery attempt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookVerificationEvent"
+      responses:
+        "202":
+          description: Accepted - Webhook received and will be processed
+        "400":
+          description: Bad Request - Invalid signature or malformed payload
+        "409":
+          description: Conflict - Duplicate webhook (event_id already processed)
+        "401":
+          description: Unauthorized - Missing or invalid signature

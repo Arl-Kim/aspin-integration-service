@@ -24,7 +24,7 @@ Key responsibilities include:
 
 ---
 
-## 🛠️ Tech Stack & Key Design Decisions
+## Tech Stack & Key Design Decisions
 
 ### Technology Stack
 
@@ -119,6 +119,8 @@ npm test -- payments.service.spec.ts
 
 ```
 
+---
+
 ## Security Considerations
 
 - All endpoints require API key authentication (simulated)
@@ -126,6 +128,8 @@ npm test -- payments.service.spec.ts
 - Input validation on all public endpoints
 - Rate limiting recommended for production
 - No sensitive data in logs
+
+---
 
 ## Documentation & Assessment Parts
 
@@ -167,8 +171,12 @@ npm install --save-dev nodemon jest @types/jest ts-jest eslint @typescript-eslin
 
 ```
 
+---
+
 ## Author
 
 **Name** - Allan Kimutai Tum
+
 **Email** - allankimutaitum@gmail.com
+
 **Website** - https://allankimutai.dev

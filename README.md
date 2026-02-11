@@ -82,9 +82,18 @@ Key responsibilities include:
    PORT=3000
    API_KEY=your_test_api_key
    WEBHOOK_SECRET=your_webhook_secret
-   PAYMENT_SECRET=your_mock_secret_key
-   PAYMENT_HUB_API_URL=http://mock-payment-hub:3001
+   PAYMENT_HUB_API_URL=http://localhost:3001
+   PAYMENT_HUB_TIMEOUT=5000
    ASPIN_CALLBACK_URL=http://localhost:3000/api/payments/webhook
+   ASPIN_API_URL=https://engine.staging.aspin-inclusivity.com
+   ASPIN_CLIENT_ID=5BNGscbCVZ
+   ASPIN_CLIENT_SECRET=XK0inXBj1KZ8Eo98ugnTmuZUfDOenIeV
+   ASPIN_USERNAME=test_admin
+   ASPIN_PASSWORD=Qwertyui1!
+   ASPIN_PARTNER_GUID=demo
+   ASPIN_TOKEN_URL=${ASPIN_API_URL}/oauth/token
+   ASPIN_PAYMENT_URL=${ASPIN_API_URL}/api/payments
+   IDEMPOTENCY_TTL=86400
    LOG_LEVEL=debug
 
    ```

@@ -75,7 +75,7 @@ export interface PaymentTransaction {
   mnoReference?: string;
   createdAt: Date;
   updatedAt: Date;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> | undefined;
 }
 
 export interface IdempotencyRecord {

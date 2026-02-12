@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from "axios";
+import axios, { type AxiosInstance } from "axios";
 import { config } from "../config/config.ts";
 import { logger } from "../utils/logger.ts";
 import { AspinTokenResponseSchema } from "../types/payment.types.ts";

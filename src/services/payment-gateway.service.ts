@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from "axios";
+import axios, { type AxiosInstance } from "axios";
 import { config } from "../config/config.ts";
 import { logger } from "../utils/logger.ts";
 import { v4 as uuidv4 } from "uuid";

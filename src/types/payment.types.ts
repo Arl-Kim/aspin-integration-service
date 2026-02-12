@@ -84,10 +84,12 @@ export interface IdempotencyRecord {
   expiresAt: Date;
 }
 
-export enum PaymentGateway {
-  MPESA = "mpesa",
-  AIRTEL = "airtel",
-}
+export const PaymentGateway = {
+  MPESA: "mpesa",
+  AIRTEL: "airtel",
+} as const;
+
+export type PaymentGateway = typeof PaymentGateway[keyof typeof PaymentGateway];
 
 export interface GatewayConfig {
   name: PaymentGateway;

@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { paymentService } from "../services/payment.service.ts";
 import {
   InitiatePaymentRequestSchema,

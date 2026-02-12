@@ -1,9 +1,10 @@
-import axios, { AxiosInstance } from "axios";
-import { config } from "../config/config";
-import { logger } from "../utils/logger";
-import { aspinAuthService } from "./aspin-auth.service";
-import type { AspinPaymentUpdate } from "../types/payment.types";
-import { AspinPaymentUpdateSchema } from "../types/payment.types";
+
+import axios, { type AxiosInstance } from "axios";
+import { config } from "../config/config.ts";
+import { logger } from "../utils/logger.ts";
+import { aspinAuthService } from "./aspin-auth.service.ts";
+import type { AspinPaymentUpdate } from "../types/payment.types.ts";
+import { AspinPaymentUpdateSchema } from "../types/payment.types.ts";
 
 export class AspinPaymentService {
   private client: AxiosInstance;

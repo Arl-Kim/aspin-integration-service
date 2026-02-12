@@ -349,3 +349,424 @@ This is blocking policy activation for customers.
 2. For the webhooks we received, did we successfully forward them to ASPIn? What response codes did ASPIn return?
 
 3. Did we experience any authentication failures with ASPIn around that time? Token expired?
+
+### 3. What logs/data would you check?
+
+#### From PaymentHub:
+
+**Webhook delivery logs** - Timestamps, target URL, HTTP status code, response body, error message, attempt number.
+**Webhook configuration** - Registered URL, shared secret, enabled events, creation/modification timestamp.
+**IP logs** - Source IP addresses used to send webhooks
+**Error logs** - DNS resolution failures, connection timeouts, SSL errors
+
+#### From ASPIn Backend:
+
+**Web server access logs** - All POST requests to webhook endpoint with status codes, response times, client IPs
+**Application logs** - Stack traces during webhook processing, validation failures, business logic errors
+**Idempotency store** - Keys received in the last 24 hours, TTL, original vs duplicate status
+**Authentication logs** - Token validation, API key checks, rate limiting counters
+**Deployment history** - Code deploys, config changes, feature flags toggled within 24h before incident
+
+#### From This Integration Service:
+
+**Inbound webhook logs** - All requests received from PaymentHub with headers, payload, timestamp
+**Outbound ASPIn logs** - Requests sent to ASPIn, response status codes, duration
+**Error logs** - Authentication failures (401), validation errors (400), timeouts
+**Metrics** - Webhook latency, success rate, error rate by error code
+
+### 4. How would you investigate? (Step-by-step)
+
+#### Phase 1: Immediate Triage
+
+**Confirm the scope** — Ask ASPIn: "Are you still missing webhooks for payments made today?" Determine if this is ongoing or a past incident.
+
+**Verify the 7 missing transactions** — Log into PaymentHub dashboard. For each of the 7 transaction IDs:
+
+Confirm status = "completed"
+
+**Check "Webhook Status"** — "Sent", "Failed", "Pending", or "Not Configured"?
+
+**Check our own logs first** — As the integration layer (if applicable), we should have received these webhooks.
+
+```bash
+
+# Quick log query
+grep -E "TXN_123456|TXN_234567|TXN_345678" logs/webhooks.log
+
+```
+
+Scenario A: We didn't receive them → Problem is between PaymentHub and us.
+
+Scenario B: We received them but failed to forward → Problem is between us and ASPIn.
+
+**Test the webhook endpoint manually** —
+
+```bash
+
+# Test with valid signature
+curl -X POST https://api.aspin.com/v1/webhooks/payment \
+  -H "X-Signature: ${VALID_SIGNATURE}" \
+  -H "X-Webhook-ID: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transaction_id": "TEST_001",
+    "status": "completed",
+    "amount": 5000,
+    "currency": "KES",
+    "timestamp": "'$(date -Iseconds)'"
+  }' \
+  -w "\nHTTP Status: %{http_code}\n"
+
+```
+
+If 200/202 → Endpoint is reachable and accepts valid requests.
+
+If 401/403 → Signature validation issue.
+
+If 404 → Wrong URL.
+
+If 500 → Application error.
+
+If timeout → Network or performance issue.
+
+#### Phase 2: Root Cause Analysis
+
+If PaymentHub logs show "Sent" but ASPIn has no record (Scenario A):
+
+**Compare IP addresses** — Are PaymentHub's webhook sender IPs in ASPIn's firewall/security group whitelist?
+
+**Check DNS** — Does api.aspin.com resolve correctly from PaymentHub's network?
+
+**Verify SSL certificate** —
+
+```bash
+
+openssl s_client -connect api.aspin.com:443 -servername api.aspin.com 2>/dev/null | openssl x509 -noout -dates
+
+```
+
+Check if certificate is expired or not yet valid.
+
+**Review load balancer logs** — Are requests reaching the load balancer but not being routed to application servers?
+
+If ASPIn logs show rejected webhooks (Scenario B):
+
+**Examine response status codes** —
+
+- 401 Unauthorized → Signature validation failure. Ask ASPIn: "What secret are you using? Has it been rotated recently?"
+
+- 400 Bad Request → Payload schema mismatch. Compare the payload of a successful vs failed webhook.
+
+- 409 Conflict → Idempotency duplicate. Check if the same transaction_id was processed twice.
+
+- 429 Too Many Requests → Rate limiting. Check X-RateLimit-\* headers.
+
+- 500 Internal Server Error → Application bug. Request stack traces.
+
+**Validate signature implementation** —
+
+```javascript
+// Reproduction script
+const crypto = require("crypto");
+
+function verifySignature(payload, signature, secret) {
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(JSON.stringify(payload))
+    .digest("hex");
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
+```
+
+Test with a known successful webhook vs failed webhook.
+
+**_ Check idempotency store_** —
+
+```sql
+
+-- Query idempotency records for the 7 transaction IDs
+SELECT * FROM idempotency_keys
+WHERE key IN ('TXN_123456', 'TXN_234567', ...)
+ORDER BY created_at DESC;
+
+```
+
+If records exist with created_at before the webhook was sent → False positive duplicate detection.
+
+#### Phase 3: Deep Dive
+
+**Replay one failed webhook** —
+
+    - Ask PaymentHub to manually redeliver one of the 7 webhooks
+
+    - Watch the entire chain with debug logging enabled
+
+    - Capture request/response at every hop
+
+**Review recent changes** —
+
+    - Ask ASPIn: "What changed in the last 24 hours?" (code, config, infrastructure)
+
+    - Check version control history for webhook handler changes
+
+    - Review feature flag toggles
+
+**Load test** — If rate limiting is suspected, check if the 8 successful webhooks were spread out and the 7 failed ones were clustered in a short window.
+
+### 5. Propose a solution and prevention strategy
+
+#### Immediate Fix (Unblock Customers):
+
+**Manual webhook replay** — Ask PaymentHub to redeliver webhooks for the 7 transactions.
+
+**Manual payment reconciliation** — If replay is not possible, use ASPIn's Admin Portal or API to manually record payments:
+
+```json
+
+POST /api/payments?partner=demo
+{
+"policy_guid": "5488c615ed6543e3a1f2edf160dd13f0",
+"amount_in_cents": 500000,
+"mno_reference": "MANUAL_20260212_001",
+"status": "Succeeded",
+"channel": "AdminPortal",
+"effected_at": "2026-02-11"
+}
+
+```
+
+**Temporary bypass** — If signature validation is failing:
+
+- Option A: ASPIn temporarily disables signature validation (with logging) to unblock
+
+- Option B: PaymentHub temporarily uses old secret while rotation is fixed
+
+#### Medium-term Solution (Systemic Fix):
+
+If the issue is Webhook URL misconfiguration:
+
+**Centralized webhook configuration service** —
+
+```yaml
+# Single source of truth
+
+webhooks:
+aspin:
+url: https://api.aspin.com/v1/webhooks/payment
+environment: production
+last_verified: 2026-02-12T10:00:00Z
+verified_by: ci-cd-pipeline
+```
+
+**Automated URL verification on update** —
+
+- Send test webhook to new URL before saving configuration
+
+- Require 200 OK response to confirm reachability
+
+**Webhook URL health monitoring** —
+
+```promql
+
+# Alert if webhook endpoint returns non-2xx for >5 minutes
+
+probe_success{job="webhook_endpoint"} == 0
+
+```
+
+If the issue is Signature validation failures:
+
+**Implement secret rotation with overlap period** —
+
+```javascript
+// Accept both old and new secrets during rotation window
+function verifySignature(payload, signature) {
+  const secrets = [currentSecret, previousSecret];
+  return secrets.some((secret) => {
+    const expected = crypto
+      .createHmac("sha256", secret)
+      .update(JSON.stringify(payload))
+      .digest("hex");
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expected)
+    );
+  });
+}
+```
+
+**Add signature metadata** —
+
+```json
+{
+  "webhook_id": "550e8400-e29b-41d4-a716-446655440000",
+  "signature": "sha256=abc123...",
+  "signature_version": 2,
+  "timestamp": "2026-02-12T10:35:00Z"
+}
+```
+
+**Monitor signature failures** —
+
+```promql
+
+# Alert on >1% signature validation failures
+
+sum(rate(webhook_signature_failed_total[5m])) /
+sum(rate(webhook_requests_total[5m])) \* 100 > 1
+
+```
+
+If the issue is Idempotency false positives:
+
+**Use transaction_id as idempotency key** — Not a generated timestamp or random string.
+
+**Extend idempotency window** — Payments may have weekend delays; store keys for 7 days not 24 hours.
+
+**Return detailed 409 response** —
+
+```json
+{
+  "error": {
+    "code": "IDEMPOTENCY_CONFLICT",
+    "message": "Duplicate webhook received",
+    "details": {
+      "original_transaction_id": "TXN_123456",
+      "original_processed_at": "2026-02-11T10:35:00Z",
+      "status": "completed"
+    }
+  }
+}
+```
+
+If the issue is Payload schema mismatch:
+
+**Version your webhook payloads** —
+
+```json
+
+{
+"api_version": "v2",
+"data": { ... }
+}
+
+```
+
+**Support multiple versions during migration** — Continue accepting v1 payloads for 30 days after v2 release.
+
+**Schema validation with detailed errors** —
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "details": [
+      {
+        "field": "amount_in_cents",
+        "issue": "Required field missing",
+        "documentation": "https://docs.paymenthub.com/webhooks/v2#amount_in_cents"
+      }
+    ]
+  }
+}
+```
+
+If the issue is Network/firewall:
+
+**Publish static IP ranges** —
+
+```yaml
+# In documentation
+
+webhook_sender_ips:
+  - 203.0.113.0/24
+  - 198.51.100.0/24
+```
+
+**Implement dead letter queue (DLQ)** —
+
+- Failed webhooks go to SQS/RabbitMQ
+
+- Manual replay UI for support engineers
+
+- Automatic replay with exponential backoff
+
+**Webhook delivery receipts** —
+
+- Respond with 202 Accepted immediately
+
+- Process webhook asynchronously
+
+- Send delivery receipt via separate channel if needed
+
+#### Long-term Prevention:
+
+**Synthetic transaction monitoring** —
+
+```javascript
+// Every hour, create a test payment and verify webhook delivery
+async function testWebhookDelivery() {
+  const testPayment = await createTestPayment(1); // KES 1
+  await waitForWebhook(testPayment.id, 30000); // 30s timeout
+  assert(webhookReceived && webhook.status === "completed");
+}
+```
+
+**Webhook inspector dashboard** —
+
+```text
+Features:
+
+- Real-time webhook stream
+- Filter by transaction ID, status, date
+- Replay button for failed deliveries
+- Payload viewer with schema validation
+- Response timeline
+
+```
+
+**Service Level Objectives (SLOs)** —
+
+```text
+
+99.9% of webhooks delivered within 30 seconds
+99.99% of webhooks delivered within 5 minutes
+<0.1% false positive idempotency rate
+
+```
+
+**Post-mortem template** —
+
+```markdown
+## Webhook Delivery Failure Post-Mortem
+
+**Incident ID:** INC-2026-02-12-001
+**Date:** 2026-02-12
+**Impact:** 7/15 (47%) webhooks failed to activate policies
+
+### Timeline
+
+- 10:35: First failed webhook
+- 11:20: Customer support ticket created
+- 11:45: Engineering alerted
+- 12:30: Root cause identified
+- 13:15: Fix deployed
+
+### Root Cause
+
+[Detailed explanation]
+
+### Action Items
+
+| Action                                 | Owner        | Due Date   |
+| -------------------------------------- | ------------ | ---------- |
+| Implement webhook signature versioning | Backend Team | 2026-02-19 |
+| Add monitoring for signature failures  | DevOps       | 2026-02-16 |
+| Update runbook with replay procedure   | Support Team | 2026-02-15 |
+
+### Prevention
+
+How we prevent this from happening again
+```
+
+My Conclusion: Both bugs highlight the same lesson: In financial services integrations, reliability is not optional. Idempotency, retries with exponential backoff, comprehensive logging, and proactive monitoring are not "nice to have" — they are minimum requirements for production systems.

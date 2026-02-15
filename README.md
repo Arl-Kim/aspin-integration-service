@@ -172,6 +172,12 @@ npm test -- payments.service.spec.ts
 - Validation errors are properly formatted
 - Non-Zod errors pass through
 
+**payment-flow.test.ts**
+
+- Supertest can run full Express app
+- External services are properly mocked
+- Database/state is isolated per test
+
 ---
 
 ## Security Considerations

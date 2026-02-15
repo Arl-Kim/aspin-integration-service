@@ -128,6 +128,50 @@ npm test -- payments.service.spec.ts
 
 ```
 
+#### Test Assumptions
+
+**idempotency.service.test.ts**
+
+- Private methods can be accessed for testing
+- 1 hour cleanup interval is acceptable
+- TTL configuration is correct
+
+**payment.service.test.ts**
+
+- MSISDN prefixes correctly identify M-Pesa vs Airtel
+- KES 5000 requirement is absolute
+- Transaction store is in-memory and cleared between tests
+
+**aspin-auth.service.test.ts**
+
+- ASPIn OAuth2 endpoint returns consistent format
+- 60-second buffer is sufficient
+- Token expiry calculation is correct
+
+**aspin-payment.service.test.ts**
+
+- Amount to cents conversion (\*100) is correct
+- ASPIn API expects YYYY-MM-DD dates
+- Partner GUID is always provided
+
+**payment.controller.test.ts**
+
+- Zod validation runs before controller logic
+- Correlation ID is always present
+- Error handler middleware catches thrown errors
+
+**auth.test.ts**
+
+- API key can be in X-API-Key or Authorization header
+- Webhook signature "invalid_signature" is test trigger
+- Webhook context attachment is safe
+
+**validation.test.ts**
+
+- Zod schemas validate body, query, params
+- Validation errors are properly formatted
+- Non-Zod errors pass through
+
 ---
 
 ## Security Considerations

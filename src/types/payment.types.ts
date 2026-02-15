@@ -40,8 +40,8 @@ export const PaymentHubWebhookSchema = z.object({
   currency: z.enum(["KES", "UGX", "RWF", "ZMW", "ZAR"]),
   timestamp: z.string().datetime(),
   signature: z.string().optional(),
-  policy_guid: z.string().uuid().optional(), // Added for context
-  mno_reference: z.string().optional(), // Added for idempotency
+  policy_guid: z.string().uuid().optional(), // For context
+  mno_reference: z.string().optional(), // For idempotency
 });
 
 export type PaymentHubWebhook = z.infer<typeof PaymentHubWebhookSchema>;

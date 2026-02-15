@@ -4,7 +4,6 @@ import {
   beforeEach,
   it,
   expect,
-  afterAll,
 } from "@jest/globals";
 import axios from "axios";
 import { aspinAuthService } from "../../../services/aspin-auth.service.js";

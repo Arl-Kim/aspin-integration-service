@@ -27,7 +27,7 @@ export class AspinPaymentService {
   ): Promise<void> {
     const payload: AspinPaymentUpdate = {
       policy_guid: policyGuid,
-      amount_in_cents: amount * 100, // Convert to cents
+      amount_in_cents: amount * 100,
       mno_reference: mnoReference,
       status: "Succeeded",
       channel: "ApiClient",

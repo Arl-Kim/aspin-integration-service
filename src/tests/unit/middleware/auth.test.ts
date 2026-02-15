@@ -3,7 +3,7 @@ import {
   authenticateApiKey,
   validateWebhookSignature,
 } from "../../../middleware/auth.js";
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response } from "express";
 
 // Mock config
 jest.mock("../../../config/config.js", () => ({

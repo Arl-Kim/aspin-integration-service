@@ -1,7 +1,7 @@
 import { jest, describe, beforeEach, it, expect } from "@jest/globals";
 import { validate } from "../../../middleware/validation.js";
 import { z } from "zod";
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response } from "express";
 
 // Mock logger
 jest.mock("../../../utils/logger.js", () => ({

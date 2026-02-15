@@ -9,7 +9,7 @@ interface MockInitiatePaymentResult {
   status: string;
 }
 
-// Mock external services with proper typing - FIXED VERSION
+// Mock external services with proper typing
 const mockPaymentGatewayService = {
   initiatePayment: jest.fn().mockImplementation(
     (): Promise<MockInitiatePaymentResult> =>

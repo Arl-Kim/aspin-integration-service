@@ -132,7 +132,7 @@ export class PaymentService {
       const year = now.getFullYear();
       const month = String(now.getMonth() + 1).padStart(2, "0");
       const day = String(now.getDate()).padStart(2, "0");
-      const effectedAt = `${year}-${month}-${day}`; // Guaranteed string
+      const effectedAt = `${year}-${month}-${day}`;
 
       if (webhook.status === "completed") {
         await aspinPaymentService.notifyPaymentSuccess(

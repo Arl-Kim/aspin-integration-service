@@ -4,7 +4,6 @@ import {
   beforeEach,
   it,
   expect,
-  afterAll,
 } from "@jest/globals";
 import { aspinPaymentService } from "../../../services/aspin-payment.service.js";
 import { aspinAuthService } from "../../../services/aspin-auth.service.js";
@@ -84,8 +83,8 @@ describe("AspinPaymentService", () => {
     it("should validate payload before sending", async () => {
       // Invalid data (missing required fields)
       const invalidData = {
-        policyGuid: "invalid-guid", // Not UUID
-        amount: -100, // Negative
+        policyGuid: "invalid-guid",
+        amount: -100,
         mnoReference: "",
         effectedAt: "invalid-date",
       };
@@ -166,8 +165,6 @@ describe("AspinPaymentService", () => {
         channel: "ApiClient",
         effected_at: testData.effectedAt,
       });
-
-      // Should not throw
     });
 
     it("should include partner GUID in request params", async () => {

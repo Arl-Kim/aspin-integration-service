@@ -67,7 +67,7 @@ export class PaymentController {
 
   /**
    * GET /api/payments/:transactionId
-   * Get payment status (optional, good for debugging)
+   * Get payment status (extra endpoint, good for debugging)
    */
   async getPaymentStatus(req: Request, res: Response): Promise<void> {
     const { transactionId } = req.params;

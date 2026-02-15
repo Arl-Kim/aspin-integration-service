@@ -4,7 +4,6 @@ import {
   beforeEach,
   it,
   expect,
-  afterAll,
 } from "@jest/globals";
 import { idempotencyService } from "../../../services/idempotency.service.js";
 

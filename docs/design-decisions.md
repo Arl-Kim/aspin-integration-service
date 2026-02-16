@@ -37,22 +37,7 @@ This will prevent abuse and ensures fair usage. I think it is essential for a pl
 
 ---
 
-## 3. Authentication Strategy
-
-I decided to go with dual authentication support:
-
-- **API Key** (X-API-Key header) - Primary method
-- **JWT Bearer tokens** - For admin operations (webhook registration)
-
-**My Reasons**
-
-- API Keys are simple and sufficient for most integration scenarios
-- JWTs allow granular permissions (webhook management requires higher privileges)
-- Both are standard, well-documented mechanisms
-
----
-
-## 4. Idempotency Implementation
+## 3. Idempotency Implementation
 
 Another design decision was to support idempotency via:
 
@@ -68,7 +53,7 @@ Another design decision was to support idempotency via:
 
 ---
 
-## 5. Webhook Design
+## 4. Webhook Design
 
 **Design Decision:**
 
@@ -85,7 +70,7 @@ Another design decision was to support idempotency via:
 
 ---
 
-## 6. Error Response Format
+## 5. Error Response Format
 
 I decided to have a consistent error object with:
 
@@ -104,7 +89,7 @@ I decided to have a consistent error object with:
 
 ---
 
-## 7. HATEOAS Links
+## 6. HATEOAS Links
 
 I decided to include `_links` object in responses with self/status URLs.
 
@@ -117,7 +102,7 @@ I decided to include `_links` object in responses with self/status URLs.
 
 ---
 
-## 8. ISO Standards Compliance
+## 7. ISO Standards Compliance
 
 I also decided to use ISO standards throughout:
 
@@ -130,7 +115,7 @@ I also decided to use ISO standards throughout:
 
 ---
 
-## 9. Security Considerations
+## 8. Security Considerations
 
 **Implemented:**
 
@@ -141,7 +126,7 @@ I also decided to use ISO standards throughout:
 
 ---
 
-## 10. Alignment with ASPIn Production API Patterns
+## 9. Alignment with ASPIn Production API Patterns
 
 This API specification is designed to mirror the patterns observed in ASPIn's actual production APIs:
 

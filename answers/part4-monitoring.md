@@ -74,7 +74,7 @@ Task: Design a monitoring strategy for your integration service.
 
 Sentry is specialized for error tracking, not metrics. Metrics tell you something is wrong; Sentry tells you exactly what and where.
 
-**We need to track 100% of these error types:**
+**_We need to track 100% of these error types:_**
 
 ### Category 1: Integration Failures (High Business Impact)
 
@@ -113,15 +113,16 @@ Sentry is specialized for error tracking, not metrics. Metrics tell you somethin
 ```
 
 **How would I categorize them?**
+
 By Severity (Sentry uses this for notifications):
 
 Level When to Use Example
 
-fatal Service cannot function. Immediate human intervention required. ASPIn OAuth completely failing
+**fatal** - Service cannot function. Immediate human intervention required. ASPIn OAuth completely failing
 error Transaction failed. Business impact. Investigate within 1 hour. Payment initiation failed
 warning Something unexpected but transaction succeeded. Investigate within 24h. Slow ASPIn response, duplicate webhook
 
-info Expected behavior. Debugging context. Payment initiated, webhook received
+**info** - Expected behavior. Debugging context. Payment initiated, webhook received
 debug Verbose logs. Not sent to Sentry in production. Request/response bodies
 
 By Domain (Tags in Sentry):
@@ -238,7 +239,9 @@ Instance health (CPU, Memory, GC, connections)
 ### For Support Team: "Customer Support Console"
 
 Purpose: Answer customer questions, investigate individual transactions, identify partner issues.
+
 Refresh: Near real-time (60s)
+
 Location: Custom internal tool / Retool / Grafana
 
 ```text
@@ -303,7 +306,9 @@ Customer impact (how many policies delayed?)
 ### For Management: "Business KPI Dashboard"
 
 Purpose: Track business outcomes, SLA compliance, partner growth.
+
 Refresh: Hourly / Daily
+
 Location: Tableau / PowerBI / Google Data Studio
 
 ```text

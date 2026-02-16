@@ -15,10 +15,15 @@ Example:
 ### 1. What are the possible root causes?
 
 **Missing idempotency implementation -** Neither ASPIn nor PartnerCRM is implementing idempotency keys. The same request is sent multiple times and each is treated as a new registration.(Priority HIGH)
+
 **Client-side retry on timeout -** ASPIn's API client is configured to retry on network timeouts or 5xx responses. The 2-second interval suggests a retry policy with fixed delay.(Priority HIGH)
+
 **User double-click / UI issue -** End-user clicked "Submit" multiple times, triggering multiple API calls.(Priority MEDIUM)
+
 **Load balancer duplication -** Proxy or load balancer forwarding the same request twice.(Priority MEDIUM)
+
 **Race condition -** Concurrent requests checking "customer exists" simultaneously, both proceeding to insert.
+
 **TCP packet retransmission -** Network-level duplication, unlikely to create 3 identical application-level requests.
 
 **My assessment:** The pattern of 3 requests within 4 seconds strongly indicates an automated retry mechanism. The identical timings (2 seconds apart) suggest fixed-interval retries rather than exponential backoff. Combined with the absence of idempotency, this is a most certainly an integration failure.
@@ -58,23 +63,33 @@ Example:
 #### From PartnerCRM:
 
 **- Web server access logs -** Timestamps, HTTP status codes, response times for the 3 requests
+
 **- Application logs -** Full request headers (especially Idempotency-Key, X-Request-ID), stack traces, database queries
-**- Database audit logs INSERT statements showing duplicate customer records, timestamps
-**- Idempotency store If exists, check if keys were recorded and for how long
-\*\*- Error logs Timeout warnings, connection resets, deadlock exceptions
+
+**- Database audit logs -** INSERT statements showing duplicate customer records, timestamps
+
+**- Idempotency store -** If exists, check if keys were recorded and for how long
+
+**- Error logs -** Timeout warnings, connection resets, deadlock exceptions
 
 #### From ASPIn Backend:
 
 **- Outbound HTTP logs -** Full request/response cycle for each attempt to PartnerCRM
+
 **- Retry mechanism logs -** What triggered the retry? (timeout, 5xx, 429)
+
 **- Configuration files -** RETRY_MAX_ATTEMPTS, RETRY_DELAY, TIMEOUT_MS values
+
 **- Correlation IDs -** Do all 3 requests share the same trace ID or different ones?
+
 **- Error logs -** Any exceptions during the registration flow
 
 #### From Infrastructure:
 
 **- Load balancer logs -** Duplicate request forwarding, backend response times
+
 **- Network traces -** TCP retransmissions, connection resets
+
 **- CDN logs -** If applicable, cached responses vs origin requests
 
 ### 4. How would you investigate? (Step-by-step)
@@ -123,7 +138,7 @@ If first request took >2 seconds, ASPIn's client likely timed out and initiated 
 
 If first response was 5xx, retry is expected. If 2xx, retry is a bug.
 
-Reproduce in test environment —
+3. Reproduce in test environment —
 
 Set up mock PartnerCRM endpoint with artificial delay (2500ms)
 
@@ -160,6 +175,7 @@ The Immediate Fix is to "Stop the bleeding":
 PartnerCRM: Implement idempotency on the receiver side — This is the most critical fix.
 
 ```sql
+
 -- Create idempotency store
 CREATE TABLE idempotency_keys (
 idempotency_key VARCHAR(36) PRIMARY KEY,
@@ -180,16 +196,19 @@ if cached: return 202 cached.response
 response = processRegistration(request)
 db.saveIdempotencyKey(key, response)
 return 202 response
-PartnerCRM: Add database unique constraint — Immediate protection against duplicates.
 
 ```
 
-````sql
+PartnerCRM: Add database unique constraint — Immediate protection against duplicates.
+
+```sql
 
 ALTER TABLE customers
 ADD CONSTRAINT unique_partner_customer
 UNIQUE (partner_guid, external_identifier);
 ASPIn Backend: Fix retry logic immediately —
+
+```
 
 ```javascript
 
@@ -211,7 +230,7 @@ return !error.response || error.response.status >= 500;
 }
 });
 
-````
+```
 
 ASPIn Backend: Reuse idempotency key across retries —
 
@@ -355,23 +374,33 @@ This is blocking policy activation for customers.
 #### From PaymentHub:
 
 **Webhook delivery logs** - Timestamps, target URL, HTTP status code, response body, error message, attempt number.
+
 **Webhook configuration** - Registered URL, shared secret, enabled events, creation/modification timestamp.
+
 **IP logs** - Source IP addresses used to send webhooks
+
 **Error logs** - DNS resolution failures, connection timeouts, SSL errors
 
 #### From ASPIn Backend:
 
 **Web server access logs** - All POST requests to webhook endpoint with status codes, response times, client IPs
+
 **Application logs** - Stack traces during webhook processing, validation failures, business logic errors
+
 **Idempotency store** - Keys received in the last 24 hours, TTL, original vs duplicate status
+
 **Authentication logs** - Token validation, API key checks, rate limiting counters
+
 **Deployment history** - Code deploys, config changes, feature flags toggled within 24h before incident
 
 #### From This Integration Service:
 
 **Inbound webhook logs** - All requests received from PaymentHub with headers, payload, timestamp
+
 **Outbound ASPIn logs** - Requests sent to ASPIn, response status codes, duration
+
 **Error logs** - Authentication failures (401), validation errors (400), timeouts
+
 **Metrics** - Webhook latency, success rate, error rate by error code
 
 ### 4. How would you investigate? (Step-by-step)
@@ -715,6 +744,7 @@ async function testWebhookDelivery() {
 **Webhook inspector dashboard** —
 
 ```text
+
 Features:
 
 - Real-time webhook stream
@@ -769,4 +799,4 @@ Features:
 How we prevent this from happening again
 ```
 
-My Conclusion: Both bugs highlight the same lesson: In financial services integrations, reliability is not optional. Idempotency, retries with exponential backoff, comprehensive logging, and proactive monitoring are not "nice to have" — they are minimum requirements for production systems.
+My Conclusion: Both bugs highlight the same lesson: In financial services integrations, reliability is not optional. Idempotency, retries with exponential backoff, comprehensive logging, and proactive monitoring are not "nice to have", they are minimum requirements for production systems.
